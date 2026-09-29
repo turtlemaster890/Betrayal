@@ -1,0 +1,98 @@
+type screenDisplay: {
+    offset: vec,
+    size: num,
+    ridingUUID: str,
+    entityUUIDs: dict[str]
+};
+
+extend screenDisplay {
+    function constructor(offset: vec, size: num, ridingUUID: str): screenDisplay {
+        return {
+            offset: offset,
+            size: size,
+            ridingUUID: ridingUUID,
+            entityUUIDs: {}
+        } as screenDisplay;
+    }
+
+    function addElement(self: var[screenDisplay], id: str, text: txt, localOffset?: vec = vec(0, 0, 0), rotation?: num = 0, sizeFactor: num = 1) {
+        game.spawnTextDisplay(loc(0, 0, 0), text);
+        lastEntity.ride(self["ridingUUID"]);
+
+        // Define local bias (e.g., shifting down relative to the text's own orientation)
+        line biasX = 0.041 - 0.016 * num.log(self["size"] * sizeFactor, 2.718281828459045235360287471352);
+        // line biasY = -0.12;
+        line biasY = -0.2 + 0.023 * num.log(self["size"] * sizeFactor, 2.718281828459045235360287471352);
+
+        // Rotate the bias vector to match the text's rotation angle
+        line rotBiasX = biasX * num.cos(rotation) - biasY * num.sin(rotation);
+        line rotBiasY = biasX * num.sin(rotation) + biasY * num.cos(rotation);
+        line correction = vec(rotBiasX, rotBiasY, 0) * self["size"] * sizeFactor;
+        
+        lastEntity.setDisplayTranslation(self["offset"] + localOffset + correction);
+        lastEntity.setDisplayScale(self["size"] * sizeFactor, self["size"] * sizeFactor, self["size"] * sizeFactor);
+        lastEntity.setDisplayRotationFromAxisAngle(vec(0, 0, 1), rotation);
+        lastEntity.setTextDisplaySeeThrough();
+        lastEntity.setTextDisplayBackground("#000000", 0);
+        lastEntity.setDisplayViewRange(1);
+        line uuids = self["entityUUIDs"];
+        uuids[id] = lastEntity.uuid;
+        self["entityUUIDs"] = uuids;
+    }
+
+    function removeAll(self: var[screenDisplay]) {
+        // line uuidsCopy = self["entityUUIDs"];
+        for (line id, line uuid of self["entityUUIDs"]) {
+            select entitiesByUUID(uuid);
+            entity.remove();
+            select reset;
+            // line uuids = self["entityUUIDs"];
+            // uuids.remove(id);
+            // self["entityUUIDs"] = uuids;
+        }
+        self["entityUUIDs"] = {};
+    }
+
+    function removeById(self: var[screenDisplay], id: str) {
+        select entitiesByUUID(self["entityUUIDs"][id]);
+        entity.remove();
+        select reset;
+        line uuids = self["entityUUIDs"];
+        uuids.remove(id);
+        self["entityUUIDs"] = uuids;
+    }
+}
+
+function inCircleFromSideLength(radius: num): num {
+    return radius / 10 * 6.88190960236;
+}
+
+function drawPlayerCard(display: var[screenDisplay], xOffset: num, plr: str) {
+    // disp.addElement("background", s"<black>⬠", vec(17.5, -9, 0), 0, 6);
+    display.addElement("head", txt.parseExpression("<head:%var(plr)>"), vec(xOffset, 0, 0));
+    display.addElement("name", s"<#838f6e><bold>%var(plr)", vec(xOffset, -10, 0), 0, 0.2);
+    line rad = inCircleFromSideLength(37.5 * (display["size"] / 100));
+    line descriptorRad = inCircleFromSideLength(50 * (display["size"] / 100));
+    // disp.addElement("strength", s"💀 2 2 3 4 5 6 6", vec(-num.cos(360 / 5) * rad, num.sin(360 / 5) * rad, 0), 90-72, 0.2);
+    line descriptors: list[txt] = [s"Might", s"Speed", s"Knowledge", s"Sanity"];
+    repeat(line i to 4) {
+        // Offset by -90 degrees (-pi/2 radians) so the pentagon points straight up
+        line angle = (i * (360 / 5) - 90); 
+        
+        // Correct vector calculation for a balanced polygon
+        line x = num.cos(angle);
+        line y = num.sin(angle);
+
+        angle += 90;
+        line adj = 1.015;
+        if (y > 0) {
+            angle += 180;
+            adj = 0.985;
+        }
+        display.addElement("stat_%var(plr)_%var(i)_bg", txt.parseExpression("<sprite:blocks:block/black_concrete>".repeat(7)), vec(x * rad * adj + xOffset, y * rad * adj, 0), angle, 0.25);
+        display.addElement("stat_%var(plr)_%var(i)", s"💀 2 3 4 5 6 6", vec(x * rad + xOffset, y * rad, 0), angle, 0.2);
+
+        display.addElement("stat_%var(plr)_%var(i)_descriptor_bg", txt.parseExpression("<sprite:blocks:block/black_concrete>".repeat(6)), vec(x * descriptorRad * adj + xOffset, y * descriptorRad * adj, 0), angle, 0.25);
+        display.addElement("stat_%var(plr)_%var(i)_descriptor", descriptors[i], vec(x * descriptorRad + xOffset, y * descriptorRad, 0), angle, 0.2);
+    }
+}

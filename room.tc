@@ -1,0 +1,45 @@
+type Room: {
+    name: str,
+    build: str,
+    floors: str,
+    doors: list[vec],
+    entryFunc: Func,
+    exitFunc: Func
+};
+
+extend Room {
+    function constructor(name: str, build: str, floors: str, doors: list[vec], entryFunc?: Func, exitFunc?: Func): Room {
+        return {
+            name: name,
+            build: build,
+            floors: floors,
+            doors: doors,
+            entryFunc: entryFunc,
+            exitFunc: exitFunc
+        } as Room;
+    }
+
+    function place(this: Room, pos: Pos) {
+        line startPos = pos.toWorldCoordinates();
+        line endPos = (startPos + vec(2, 4, 2));
+        line build = this["build"].split(",");
+
+        line i = 0;
+        for (line blockPos of grid(startPos, endPos)) {
+            i++;
+            line block = build[i];
+            if (block) {game.setBlock(item(block), blockPos);} else {game.setBlock(item("air"), blockPos);}
+        }
+    }
+
+    function drawDoors(this: Room, pos: Pos) {
+        line centerPos = pos.toCenterCoordinates();
+
+        for (line doorPos of this["doors"]) {
+            line worldDoorPos = (centerPos + doorPos.setLength(1.5)) + vec(0, 1, 0);
+            
+            line perpendicular = vec(doorPos.z, 0, -doorPos.x).setLength(0.5);
+            allPlayers.displayParticleLine(par("Flame", motion = vec(0, 0, 0)), worldDoorPos - perpendicular, worldDoorPos + perpendicular, 0.1);
+        }
+    }
+}

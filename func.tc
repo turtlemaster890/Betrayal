@@ -1,0 +1,11 @@
+type Func: str;
+
+extend Func {
+    function constructor(funcName: str): Func {
+        return funcName;
+    }
+
+    function call(self: Func, args: list[any]) {
+        call "%var(self)"(args);
+    }
+}

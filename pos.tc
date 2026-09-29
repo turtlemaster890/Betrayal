@@ -1,0 +1,24 @@
+type Pos: vec;
+
+extend Pos {
+    function constructor(x: num, y: num, z: num): Pos {
+        return vec(x, y, z);
+    }
+
+    function toWorldCoordinates(self: Pos): loc {
+        return loc(self.x * 3, self.y * 5, self.z * 3) + vec(50, 50, 50);
+    }
+
+    function toCenterCoordinates(self: Pos): loc {
+        return self.toWorldCoordinates() + vec(1.5, 0, 1.5);
+    }
+
+    function toDictKey(self: Pos): str {
+        return "%index(self, 1),%index(self, 2),%index(self, 3)";
+    }
+}
+
+function posFromDictKey(key: str): Pos {
+        line parts = key.split(",");
+        return Pos(num.parse(parts[1]), num.parse(parts[2]), num.parse(parts[3]));
+    }

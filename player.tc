@@ -1,0 +1,76 @@
+type bool: num;
+declare global true: bool;
+declare global false: bool;
+
+type Player: {
+    name: str,
+    displayUUID: str,
+    playerUUID: str,
+    pos: Pos,
+    inventory: list[item],
+    stats: {
+        strength: num,
+        speed: num,
+        sanity: num,
+        intelligence: num
+    },
+    isAlive: bool
+};
+
+extend Player {
+    function constructor(name: str, playerUUID: str, pos: Pos, inventory?: list[Item]): Player {
+        if (!inventory) {
+            inventory = [];
+        }
+
+        game.spawnItemDisplay(pos.toCenterCoordinates(), item("player_head").setHeadTexture(playerUUID));
+        lastEntity.setDisplayTranslation(vec(0, 0, 1/4));
+        lastEntity.setDisplayRotationFromAxisAngle(vec(1, 0, 0), 90);
+        lastEntity.setDisplayBrightness(15, 15);
+        lastEntity.setTag("playerDisplay", playerUUID); 
+
+        line plr = {
+            name: name,
+            displayUUID: lastEntity.uuid,
+            playerUUID: playerUUID,
+            pos: pos,
+            inventory: inventory,
+            stats: {
+                strength: 10,
+                speed: 10,
+                sanity: 10,
+                intelligence: 10
+            },
+            isAlive: true
+        } as Player;
+
+        plr.updateDisplayPosition();
+
+        return plr;
+    }
+
+    function updateDisplayPosition(self: Player) {
+        line center = self["pos"].toCenterCoordinates() + vec(0, 0.85, 0);
+        // center.pitch = 90;
+        select entitiesByUUID(self["displayUUID"]);
+        entity.teleport(center);
+        select entitiesByCondition(entity.hasTag("playerDisplay"));
+        filter byCondition(entity.isNearLocation(center, 1.5, shape="Cube"));
+        line uuids = game.selectionTargetUUIDs;
+        select reset;
+
+        if (uuids.len() == 1) {
+            select entitiesByUUID(uuids[1]);
+            return;
+        }
+
+        line i = 0;
+        line total = uuids.len();
+        for (line uuid of uuids) {
+            select entitiesByUUID(uuid);
+            entity.teleport(center + vec(0, 0, 0.65).rotateAroundVec(vec(0, 1, 0), 360 / total * i));
+            select reset;
+            i++;
+        }
+    }
+}

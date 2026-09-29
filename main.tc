@@ -1,0 +1,34 @@
+declare global players: dict[Player];
+declare global rooms: list[Room];
+declare global roomGrid: dict[Room];
+
+gameevent startup {
+    true = 1;
+    false = 0;
+
+    line allDoors: list[vec] = [vec(1, 0, 0), vec(0, 0, 1), vec(-1, 0, 0), vec(0, 0, -1)];
+
+    line foyer = Room("Foyer", "spruce_planks,spruce_planks,spruce_planks,spruce_planks,spruce_planks,spruce_planks,spruce_planks,spruce_planks,spruce_planks", "G", allDoors);
+    line basement = Room("Basement", "black_concrete,black_concrete,light_gray_concrete,black_concrete,light_gray_concrete,light_gray_concrete,light_gray_concrete,light_gray_concrete,light_gray_concrete", "B", allDoors);
+
+
+    foyer.place(Pos(0, 1, 0));
+    roomGrid[Pos(0, 1, 0).toDictKey()] = foyer;
+    basement.place(Pos(0, 0, 0));
+    roomGrid[Pos(0, 0, 0).toDictKey()] = basement;
+
+    repeat {
+        basement.drawDoors(Pos(0, 0, 0));
+        wait;
+    }
+}
+
+playerevent join {
+    // call "setCloudHeight"();
+
+    line plr = Player("%default", "%uuid", Pos(0, 0, 0));
+    players["%uuid"] = plr;
+    Player("Bob", "12095784", Pos(0, 0, 0));
+    Player("Bob", "12095784", Pos(0, 0, 0));
+    // Player("Bob", "12095784", Pos(0, 0, 0));
+}
