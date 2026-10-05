@@ -1,0 +1,21 @@
+type Camera: str;
+
+extend Camera {
+    function constructor(): Camera {
+        game.spawnArmorStand(loc(0, 0, 0));
+        lastEntity.setInvisible();
+        lastEntity.setInvulnerable();
+        lastEntity.setGravity();
+        return lastEntity.uuid as Camera;
+    }
+
+    function spectate(self: Camera) {
+        player.spectateTarget(self);
+    }
+
+    function teleport(self: Camera, location: loc) {
+        select entitiesByUUID(self);
+        entity.teleport(location);
+        select reset;
+    }
+}

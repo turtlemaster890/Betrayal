@@ -46,6 +46,8 @@ extend Player {
 
         plr.updateDisplayPosition();
 
+        // players[playerUUID] = plr;
+
         return plr;
     }
 

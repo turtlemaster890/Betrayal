@@ -68,31 +68,45 @@ function inCircleFromSideLength(radius: num): num {
 }
 
 function drawPlayerCard(display: var[screenDisplay], xOffset: num, plr: str) {
-    // disp.addElement("background", s"<black>⬠", vec(17.5, -9, 0), 0, 6);
     display.addElement("head", txt.parseExpression("<head:%var(plr)>"), vec(xOffset, 0, 0));
     display.addElement("name", s"<#838f6e><bold>%var(plr)", vec(xOffset, -10, 0), 0, 0.2);
+    
     line rad = inCircleFromSideLength(37.5 * (display["size"] / 100));
     line descriptorRad = inCircleFromSideLength(50 * (display["size"] / 100));
-    // disp.addElement("strength", s"💀 2 2 3 4 5 6 6", vec(-num.cos(360 / 5) * rad, num.sin(360 / 5) * rad, 0), 90-72, 0.2);
+    
     line descriptors: list[txt] = [s"Might", s"Speed", s"Knowledge", s"Sanity"];
+    line statValues: list[txt] = [s"💀", s"2", s"3", s"4", s"5", s"6", s"6"];
+
     repeat(line i to 4) {
-        // Offset by -90 degrees (-pi/2 radians) so the pentagon points straight up
         line angle = (i * (360 / 5) - 90); 
-        
-        // Correct vector calculation for a balanced polygon
         line x = num.cos(angle);
         line y = num.sin(angle);
 
-        angle += 90;
+        line baseAngle = angle + 90;
         line adj = 1.015;
         if (y > 0) {
-            angle += 180;
+            baseAngle += 180;
             adj = 0.985;
         }
-        display.addElement("stat_%var(plr)_%var(i)_bg", txt.parseExpression("<sprite:blocks:block/black_concrete>".repeat(7)), vec(x * rad * adj + xOffset, y * rad * adj, 0), angle, 0.25);
-        display.addElement("stat_%var(plr)_%var(i)", s"💀 2 3 4 5 6 6", vec(x * rad + xOffset, y * rad, 0), angle, 0.2);
 
-        display.addElement("stat_%var(plr)_%var(i)_descriptor_bg", txt.parseExpression("<sprite:blocks:block/black_concrete>".repeat(6)), vec(x * descriptorRad * adj + xOffset, y * descriptorRad * adj, 0), angle, 0.25);
-        display.addElement("stat_%var(plr)_%var(i)_descriptor", descriptors[i], vec(x * descriptorRad + xOffset, y * descriptorRad, 0), angle, 0.2);
+        // Draw descriptor and its background
+        display.addElement("stat_%var(plr)_%var(i)_descriptor_bg", txt.parseExpression("<sprite:blocks:block/black_concrete>".repeat(6)), vec(x * descriptorRad * adj + xOffset, y * descriptorRad * adj, 0), baseAngle, 0.25);
+        display.addElement("stat_%var(plr)_%var(i)_descriptor", descriptors[i], vec(x * descriptorRad + xOffset, y * descriptorRad, 0), baseAngle, 0.2);
+
+        // Single background strip for the stats
+        display.addElement("stat_%var(plr)_%var(i)_bg", txt.parseExpression("<sprite:blocks:block/black_concrete>".repeat(7)), vec(x * rad * adj + xOffset, y * rad * adj, 0), baseAngle, 0.25);
+
+        // Spawn individual numbers, rotated 90° for vertical text
+        line verticalAngle = baseAngle + 90 + (180 * (i % 2));
+        
+        repeat(line j to statValues.len()) {
+            // Offset each number along the vertical line
+            line spacingOffset = (j - (statValues.len() / 2)) * 2.25 * (1 -  2 *(i % 2)) - (1 -  2 *(i % 2));
+            
+            line statX = (x * rad) + (-num.cos(baseAngle) * spacingOffset) + xOffset;
+            line statY = (y * rad) + (-num.sin(baseAngle) * spacingOffset);
+            // Individual number display element
+            display.addElement("stat_%var(plr)_%var(i)_%var(j)", statValues[j], vec(statX, statY, 0), verticalAngle, 0.2);
+        }
     }
 }
