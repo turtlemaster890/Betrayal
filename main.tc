@@ -4,7 +4,6 @@ declare global rooms: list[Room];
 declare global roomGrid: dict[Room];
 
 declare global camera: Camera;
-declare global display: screenDisplay;
 
 declare global "player_%var(i)": Player;
 declare global "player_%var(playerCount)": Player;
@@ -15,7 +14,6 @@ gameevent startup {
 
     camera = Camera();
     camera.teleport(loc(51.5, 53, 49.5, 55));
-    display = screenDisplay(vec(0, 40, -50), 50, camera);
 
     line allDoors: list[vec] = [vec(1, 0, 0), vec(0, 0, 1), vec(-1, 0, 0), vec(0, 0, -1)];
 
@@ -39,11 +37,12 @@ playerevent join {
     call "setCloudHeight"();
     player.setToSpectatorMode();
     camera.spectate();
+    player.givePotionEffect(pot("invisibility"), particles = "None", showIcon = "False");
 
     line plr = Player("%default", "%uuid", Pos(0, 0, 0));
     playerCount++;
     global "player_%var(playerCount)" = plr;
-    drawPlayerCard(display, 110 - (44 * (playerCount - 1)), "%default");
+    hudRegister("%default", "%uuid");
     // players["%uuid"] = plr;
     // Player("Bob", "12095784", Pos(0, 0, 0));
     // Player("Bob", "12095784", Pos(0, 0, 0));

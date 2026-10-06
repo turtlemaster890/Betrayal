@@ -18,4 +18,11 @@ extend Camera {
         entity.teleport(location);
         select reset;
     }
+
+    function pos(self: Camera): loc {
+        select entitiesByUUID(self);
+        line pos = selectedEntity.location;
+        select reset;
+        return pos;
+    }
 }

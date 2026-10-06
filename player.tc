@@ -63,6 +63,7 @@ extend Player {
 
         if (uuids.len() == 1) {
             select entitiesByUUID(uuids[1]);
+            select reset;
             return;
         }
 

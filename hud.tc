@@ -1,0 +1,284 @@
+type HudEntry: {
+    name: str,
+    ex: num,
+    ey: num,
+    step: num,
+    cur: num,
+    lastSlot: num
+};
+
+type HudCal: {
+    ex: num,
+    ey: num
+};
+
+declare saved hudCal: dict[HudCal];
+declare global hudEntries: dict[HudEntry];
+declare global hudDisplays: dict[screenDisplay];
+
+// Hide one HUD element from every player except its owner.
+function hudHideFromOthers(entityUUID: str, ownerUUID: str) {
+    for (line key of hudEntries.getKeys()) {
+        if (key != ownerUUID) {
+            select playersByName(key);
+            player.setEntityHidden(entityUUID);
+            select reset;
+        }
+    }
+}
+
+// Hide everyone else's HUD elements from this player (used on rejoin).
+function hudHideOthersFor(viewerUUID: str) {
+    for (line key of hudEntries.getKeys()) {
+        if (key != viewerUUID) {
+            line d = hudDisplays[key];
+            for (line id, line eu of d["entityUUIDs"]) {
+                select playersByName(viewerUUID);
+                player.setEntityHidden(eu);
+                select reset;
+            }
+        }
+    }
+}
+
+// ex/ey = distance from HUD origin to right/top screen edge (HUD units). Defaults roughly match the old layout.
+function hudRegister(name: str, uuid: str) {
+    if (hudEntries.hasKey(uuid)) {
+        hudHideOthersFor(uuid);
+    } else {
+        line ex = 150;
+        line ey = 25;
+        line needsCalibration = 1;
+        if (hudCal.hasKey(uuid)) {
+            line c = hudCal[uuid];
+            ex = c["ex"];
+            ey = c["ey"];
+            needsCalibration = 0;
+        }
+
+        line entry = {
+            name: name,
+            ex: ex,
+            ey: ey,
+            step: 0,
+            cur: 0,
+            lastSlot: 0
+        } as HudEntry;
+        hudEntries[uuid] = entry;
+        hudDisplays[uuid] = screenDisplay(vec(0, 40, -50), 50, camera, uuid);
+        hudRebuildAll();
+        if (needsCalibration == 1) {
+            hudCalibrate(uuid);
+        }
+    }
+}
+
+// Runs the whole wizard on the calling player's thread. Blocks until the player finishes.
+function hudCalibrate(uuid: str) {
+    if (hudEntries.hasKey(uuid)) {
+        line e = hudEntries[uuid];
+        if (e["step"] == 0) {
+            e["step"] = 1;
+            e["cur"] = 60;
+            e["lastSlot"] = 5;
+            hudEntries[uuid] = e;
+
+            // Clear the cards, parent this player's display to the player, show the marker
+            line d = hudDisplays[uuid];
+            d.removeAll();
+            d["ridingUUID"] = uuid;
+            hudDisplays[uuid] = d;
+            hudDrawMarker(uuid);
+
+            // Scrolling only works outside spectator
+            player.setToSurvivalMode();
+            player.spectateTarget();
+            player.setHotbarSlot(5);
+            player.sendMessage(s"<#838f6e><bold>HUD setup 1/2:</bold> scroll your hotbar (down = outward) until the red square touches the RIGHT edge of your screen, then swaphands. (No scroll? use <white>!hud out</white> / <white>!hud in</white> / <white>!hud ok</white>)");
+
+            // Hold the player at the camera's exact position/rotation so the view matches the real HUD view.\
+            line cameraPos = camera.pos();
+            
+            repeat {
+                line cur = hudEntries[uuid];
+                if (cur["step"] == 0) {
+                    break;
+                }
+                player.teleport(cameraPos);
+                wait;
+            }
+
+            // Wizard finished: back to spectating the camera, re-parent and rebuild
+            player.setToSpectatorMode();
+            camera.spectate();
+            line fd = hudDisplays[uuid];
+            fd.removeAll();
+            fd["ridingUUID"] = camera;
+            hudDisplays[uuid] = fd;
+            hudRebuildFor(uuid);
+            player.sendMessage(s"<#838f6e>HUD calibrated. Redo it any time with <white>!hud calibrate</white>.");
+        }
+    }
+}
+
+// Spawn the marker (only call after removeAll, or when it doesn't exist yet).
+function hudDrawMarker(uuid: str) {
+    line e = hudEntries[uuid];
+    if (e["step"] > 0) {
+        line pos = vec(e["cur"], 0, 0);
+        if (e["step"] == 2) {
+            pos = vec(0, e["cur"], 0);
+        }
+        line d = hudDisplays[uuid];
+        d.addElement("calib_%var(uuid)", txt.parseExpression("<sprite:blocks:block/red_concrete>"), pos, 0, 0.25);
+        hudDisplays[uuid] = d;
+    }
+}
+
+// Move the existing marker (no respawn).
+function hudMoveMarker(uuid: str) {
+    line e = hudEntries[uuid];
+    line pos = vec(e["cur"], 0, 0);
+    if (e["step"] == 2) {
+        pos = vec(0, e["cur"], 0);
+    }
+    line d = hudDisplays[uuid];
+    d.moveElement("calib_%var(uuid)", pos, 0, 0.25);
+}
+
+function hudNudge(uuid: str, delta: num) {
+    if (hudEntries.hasKey(uuid)) {
+        line e = hudEntries[uuid];
+        if (e["step"] > 0) {
+            e["cur"] = e["cur"] + delta * 2;
+            if (e["cur"] < 5) {
+                e["cur"] = 5;
+            }
+            if (e["cur"] > 400) {
+                e["cur"] = 400;
+            }
+            hudEntries[uuid] = e;
+            hudMoveMarker(uuid);
+        }
+    }
+}
+
+function hudConfirm(uuid: str) {
+    if (hudEntries.hasKey(uuid)) {
+        line e = hudEntries[uuid];
+        if (e["step"] == 1) {
+            e["ex"] = e["cur"];
+            e["step"] = 2;
+            e["cur"] = 10;
+            hudEntries[uuid] = e;
+            hudMoveMarker(uuid);
+            player.sendMessage(s"<#838f6e><bold>HUD setup 2/2:</bold> now move the square up until it touches the TOP edge, then swaphands.");
+        } else {
+            if (e["step"] == 2) {
+                e["ey"] = e["cur"];
+                e["step"] = 0;   // ends the loop in hudCalibrate, which does the cleanup
+                hudEntries[uuid] = e;
+                line cal = {
+                    ex: e["ex"],
+                    ey: e["ey"]
+                } as HudCal;
+                hudCal[uuid] = cal;
+            }
+        }
+    }
+}
+
+function hudRebuildAll() {
+    for (line key of hudEntries.getKeys()) {
+        hudRebuildFor(key);
+    }
+}
+
+// Rebuild ONE player's private HUD from their own calibration.
+function hudRebuildFor(uuid: str) {
+    line n = hudEntries.len();
+    line e = hudEntries[uuid];
+
+    // Card at size 50 is ~40 wide, ~44 tall, spaced 44 apart. 0.9 = safety margin.
+    line kH = e["ey"] * 0.9 / 22;
+    line kW = 2 * e["ex"] * 0.9 / (44 * (n - 1) + 40);
+    line k = kH;
+    if (kW < k) {
+        k = kW;
+    }
+    if (k > 1.5) {
+        k = 1.5;
+    }
+    if (k < 0.2) {
+        k = 0.2;
+    }
+
+    line d = hudDisplays[uuid];
+    d.removeAll();
+    d["size"] = 50 * k;
+
+    // Mid-calibration: only the marker is shown
+    if (e["step"] == 0) {
+        line beginning = e["ex"] * 0.9 - 20 * k;
+        line i = 0;
+        for (line key of hudEntries.getKeys()) {
+            drawPlayerCard(d, beginning - 44 * k * i, hudEntries[key]["name"]);
+            i++;
+        }
+    }
+    hudDisplays[uuid] = d;
+    hudDrawMarker(uuid);
+}
+
+// Scroll wheel -> nudge marker. Tracks last slot so wraparound (9 -> 1) works.
+playerevent changeSlot {
+    if (hudEntries.hasKey("%uuid")) {
+        line slot = event.hotbarSlot;
+        line e = hudEntries["%uuid"];
+        line last = e["lastSlot"];
+        e["lastSlot"] = slot;
+        hudEntries["%uuid"] = e;
+        if (last > 0) {
+            line d = slot - last;
+            if (d > 4) {
+                d = d - 9;
+            }
+            if (d < -4) {
+                d = d + 9;
+            }
+            hudNudge("%uuid", d);
+        }
+    }
+}
+
+// playerevent leftClick {
+//     print("lc");
+//     hudConfirm("%uuid");
+// }
+
+playerevent swapHands {
+    hudConfirm("%uuid");
+}
+
+// Chat fallback: !hud calibrate | out | in | ok
+playerevent chat {
+    line msg: str = event.message;
+    line parts = msg.split(" ");
+    if (parts[1] == "!hud") {
+        event.cancel();
+        if (parts.len() >= 2) {
+            if (parts[2] == "calibrate") {
+                hudCalibrate("%uuid");
+            }
+            if (parts[2] == "out") {
+                hudNudge("%uuid", 3);
+            }
+            if (parts[2] == "in") {
+                hudNudge("%uuid", -3);
+            }
+            if (parts[2] == "ok") {
+                hudConfirm("%uuid");
+            }
+        }
+    }
+}

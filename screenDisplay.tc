@@ -2,23 +2,23 @@ type screenDisplay: {
     offset: vec,
     size: num,
     ridingUUID: str,
+    owner: str,
     entityUUIDs: dict[str]
 };
 
 extend screenDisplay {
-    function constructor(offset: vec, size: num, ridingUUID: str): screenDisplay {
+    function constructor(offset: vec, size: num, ridingUUID: str, owner: str): screenDisplay {
         return {
             offset: offset,
             size: size,
             ridingUUID: ridingUUID,
+            owner: owner,
             entityUUIDs: {}
         } as screenDisplay;
     }
 
-    function addElement(self: var[screenDisplay], id: str, text: txt, localOffset?: vec = vec(0, 0, 0), rotation?: num = 0, sizeFactor: num = 1) {
-        game.spawnTextDisplay(loc(0, 0, 0), text);
-        lastEntity.ride(self["ridingUUID"]);
-
+    // Final translation vector for an element (offset + local offset + text bias correction).
+    function translationFor(self: var[screenDisplay], localOffset: vec, rotation: num, sizeFactor: num): vec {
         // Define local bias (e.g., shifting down relative to the text's own orientation)
         line biasX = 0.041 - 0.016 * num.log(self["size"] * sizeFactor, 2.718281828459045235360287471352);
         // line biasY = -0.12;
@@ -28,8 +28,17 @@ extend screenDisplay {
         line rotBiasX = biasX * num.cos(rotation) - biasY * num.sin(rotation);
         line rotBiasY = biasX * num.sin(rotation) + biasY * num.cos(rotation);
         line correction = vec(rotBiasX, rotBiasY, 0) * self["size"] * sizeFactor;
-        
-        lastEntity.setDisplayTranslation(self["offset"] + localOffset + correction);
+
+        return self["offset"] + localOffset + correction;
+    }
+
+    function addElement(self: var[screenDisplay], id: str, text: txt, localOffset?: vec = vec(0, 0, 0), rotation?: num = 0, sizeFactor: num = 1) {
+        line translation = self.translationFor(localOffset, rotation, sizeFactor);
+
+        game.spawnTextDisplay(loc(0, 0, 0), text);
+        lastEntity.ride(self["ridingUUID"]);
+
+        lastEntity.setDisplayTranslation(translation);
         lastEntity.setDisplayScale(self["size"] * sizeFactor, self["size"] * sizeFactor, self["size"] * sizeFactor);
         lastEntity.setDisplayRotationFromAxisAngle(vec(0, 0, 1), rotation);
         lastEntity.setTextDisplaySeeThrough();
@@ -38,6 +47,15 @@ extend screenDisplay {
         line uuids = self["entityUUIDs"];
         uuids[id] = lastEntity.uuid;
         self["entityUUIDs"] = uuids;
+        hudHideFromOthers(lastEntity.uuid, self["owner"]);
+    }
+
+    // Move an existing element without respawning it. Pass the same rotation/sizeFactor it was created with.
+    function moveElement(self: var[screenDisplay], id: str, localOffset: vec, rotation?: num = 0, sizeFactor: num = 1) {
+        line translation = self.translationFor(localOffset, rotation, sizeFactor);
+        select entitiesByUUID(self["entityUUIDs"][id]);
+        entity.setDisplayTranslation(translation);
+        select reset;
     }
 
     function removeAll(self: var[screenDisplay]) {
@@ -68,8 +86,9 @@ function inCircleFromSideLength(radius: num): num {
 }
 
 function drawPlayerCard(display: var[screenDisplay], xOffset: num, plr: str) {
+    line k = display["size"] / 50;
     display.addElement("head", txt.parseExpression("<head:%var(plr)>"), vec(xOffset, 0, 0));
-    display.addElement("name", s"<#838f6e><bold>%var(plr)", vec(xOffset, -10, 0), 0, 0.2);
+    display.addElement("name", s"<#838f6e><bold>%var(plr)", vec(xOffset, -10 * k, 0), 0, 0.2);
     
     line rad = inCircleFromSideLength(37.5 * (display["size"] / 100));
     line descriptorRad = inCircleFromSideLength(50 * (display["size"] / 100));
@@ -101,7 +120,7 @@ function drawPlayerCard(display: var[screenDisplay], xOffset: num, plr: str) {
         
         repeat(line j to statValues.len()) {
             // Offset each number along the vertical line
-            line spacingOffset = (j - (statValues.len() / 2)) * 2.25 * (1 -  2 *(i % 2)) - (1 -  2 *(i % 2));
+            line spacingOffset = ((j - (statValues.len() / 2)) * 2.25 * (1 - 2 * (i % 2)) - (1 - 2 * (i % 2))) * k;
             
             line statX = (x * rad) + (-num.cos(baseAngle) * spacingOffset) + xOffset;
             line statY = (y * rad) + (-num.sin(baseAngle) * spacingOffset);
