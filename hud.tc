@@ -1,8 +1,16 @@
+namespace calibrationTypes {
+    none = "n";
+    horizontal = "h";
+    vertical = "v";
+}
+
+import calibrationTypes;
+
 type HudEntry: {
     name: str,
     ex: num,
     ey: num,
-    step: num,
+    step: str,
     cur: num,
     lastSlot: num
 };
@@ -60,7 +68,7 @@ function hudRegister(name: str, uuid: str) {
             name: name,
             ex: ex,
             ey: ey,
-            step: 0,
+            step: calibrationTypes.none,
             cur: 0,
             lastSlot: 0
         } as HudEntry;
@@ -77,8 +85,8 @@ function hudRegister(name: str, uuid: str) {
 function hudCalibrate(uuid: str) {
     if (hudEntries.hasKey(uuid)) {
         line e = hudEntries[uuid];
-        if (e["step"] == 0) {
-            e["step"] = 1;
+        if (e["step"] == calibrationTypes.none) {
+            e["step"] = calibrationTypes.horizontal;
             e["cur"] = 60;
             e["lastSlot"] = 5;
             hudEntries[uuid] = e;
@@ -94,14 +102,14 @@ function hudCalibrate(uuid: str) {
             player.setToSurvivalMode();
             player.spectateTarget();
             player.setHotbarSlot(5);
-            player.sendMessage(s"<#838f6e><bold>HUD setup 1/2:</bold> scroll your hotbar (down = outward) until the red square touches the RIGHT edge of your screen, then swaphands. (No scroll? use <white>!hud out</white> / <white>!hud in</white> / <white>!hud ok</white>)");
+            player.sendMessage(s"<#838f6e><bold>HUD setup 1/2:</bold> scroll your hotbar (down = outward) until the red square touches the RIGHT edge of your screen, then swaphands. (No scroll? use <white>@hud out</white> / <white>@hud in</white> / <white>@hud ok</white>)");
 
             // Hold the player at the camera's exact position/rotation so the view matches the real HUD view.\
             line cameraPos = camera.pos();
             
             repeat {
                 line cur = hudEntries[uuid];
-                if (cur["step"] == 0) {
+                if (cur["step"] == calibrationTypes.none) {
                     break;
                 }
                 player.teleport(cameraPos);
@@ -116,7 +124,7 @@ function hudCalibrate(uuid: str) {
             fd["ridingUUID"] = camera;
             hudDisplays[uuid] = fd;
             hudRebuildFor(uuid);
-            player.sendMessage(s"<#838f6e>HUD calibrated. Redo it any time with <white>!hud calibrate</white>.");
+            player.sendMessage(s"<#838f6e>HUD calibrated. Redo it any time with <white>@hud calibrate</white>.");
         }
     }
 }
@@ -124,9 +132,9 @@ function hudCalibrate(uuid: str) {
 // Spawn the marker (only call after removeAll, or when it doesn't exist yet).
 function hudDrawMarker(uuid: str) {
     line e = hudEntries[uuid];
-    if (e["step"] > 0) {
+    if (e["step"] != calibrationTypes.none) {
         line pos = vec(e["cur"], 0, 0);
-        if (e["step"] == 2) {
+        if (e["step"] == calibrationTypes.vertical) {
             pos = vec(0, e["cur"], 0);
         }
         line d = hudDisplays[uuid];
@@ -139,7 +147,7 @@ function hudDrawMarker(uuid: str) {
 function hudMoveMarker(uuid: str) {
     line e = hudEntries[uuid];
     line pos = vec(e["cur"], 0, 0);
-    if (e["step"] == 2) {
+    if (e["step"] == calibrationTypes.vertical) {
         pos = vec(0, e["cur"], 0);
     }
     line d = hudDisplays[uuid];
@@ -149,7 +157,7 @@ function hudMoveMarker(uuid: str) {
 function hudNudge(uuid: str, delta: num) {
     if (hudEntries.hasKey(uuid)) {
         line e = hudEntries[uuid];
-        if (e["step"] > 0) {
+        if (e["step"] != calibrationTypes.none) {
             e["cur"] = e["cur"] + delta * 2;
             if (e["cur"] < 5) {
                 e["cur"] = 5;
@@ -166,17 +174,17 @@ function hudNudge(uuid: str, delta: num) {
 function hudConfirm(uuid: str) {
     if (hudEntries.hasKey(uuid)) {
         line e = hudEntries[uuid];
-        if (e["step"] == 1) {
+        if (e["step"] == calibrationTypes.horizontal) {
             e["ex"] = e["cur"];
-            e["step"] = 2;
+            e["step"] = calibrationTypes.vertical;
             e["cur"] = 10;
             hudEntries[uuid] = e;
             hudMoveMarker(uuid);
             player.sendMessage(s"<#838f6e><bold>HUD setup 2/2:</bold> now move the square up until it touches the TOP edge, then swaphands.");
         } else {
-            if (e["step"] == 2) {
+            if (e["step"] == calibrationTypes.vertical) {
                 e["ey"] = e["cur"];
-                e["step"] = 0;   // ends the loop in hudCalibrate, which does the cleanup
+                e["step"] = calibrationTypes.none;   // ends the loop in hudCalibrate, which does the cleanup
                 hudEntries[uuid] = e;
                 line cal = {
                     ex: e["ex"],
@@ -218,7 +226,7 @@ function hudRebuildFor(uuid: str) {
     d["size"] = 50 * k;
 
     // Mid-calibration: only the marker is shown
-    if (e["step"] == 0) {
+    if (e["step"] == calibrationTypes.none) {
         line beginning = e["ex"] * 0.9 - 20 * k;
         line i = 0;
         for (line key of hudEntries.getKeys()) {
@@ -251,21 +259,20 @@ playerevent changeSlot {
     }
 }
 
-// playerevent leftClick {
-//     print("lc");
-//     hudConfirm("%uuid");
-// }
+playerevent leftClick {
+    print("lc");
+    hudConfirm("%uuid");
+}
 
 playerevent swapHands {
     hudConfirm("%uuid");
 }
 
-// Chat fallback: !hud calibrate | out | in | ok
-playerevent chat {
-    line msg: str = event.message;
+// Chat fallback: @hud calibrate | out | in | ok
+playerevent command {
+    line msg: str = event.command;
     line parts = msg.split(" ");
-    if (parts[1] == "!hud") {
-        event.cancel();
+    if (parts[1] == "hud") {
         if (parts.len() >= 2) {
             if (parts[2] == "calibrate") {
                 hudCalibrate("%uuid");
